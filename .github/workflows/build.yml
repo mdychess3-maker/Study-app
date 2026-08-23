@@ -1,0 +1,68 @@
+name: Build APK
+
+on:
+  push:
+    branches: [main, master]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Flutter 3.24.5
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.24.5'
+          channel: 'stable'
+
+      - name: Cache dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.pub-cache
+            build/
+          key: ${{ runner.os }}-flutter-${{ hashFiles('**/pubspec.lock') }}
+
+      - name: Generate Android project
+        run: |
+          # Flutter creates the full android/ folder structure
+          flutter create /tmp/flutter_project --project-name study_app_3x
+          
+          # Copy only the Android platform folder into our repo
+          cp -r /tmp/flutter_project/android .
+          
+          # Clean up
+          rm -rf /tmp/flutter_project
+
+      - name: Add camera permission
+        run: |
+          MANIFEST="android/app/src/main/AndroidManifest.xml"
+          
+          # Inject CAMERA permission after the <manifest> tag
+          sed -i '/<manifest/a \    <uses-permission android:name="android.permission.CAMERA" />' "$MANIFEST"
+          
+          # Verify the result
+          echo "=== Final AndroidManifest.xml ==="
+          cat "$MANIFEST"
+
+      - name: Get dependencies
+        run: flutter pub get
+
+      - name: Build release APK
+        run: flutter build apk --release
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: study-app-3-release
+          path: build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: error
